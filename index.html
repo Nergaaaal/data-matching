@@ -304,22 +304,62 @@
         }
         .select-group select {
             width: 100%;
-            padding: 0.6rem 0.8rem;
+            padding: 0.8rem 1rem;
             border: 1px solid #e5e7eb;
-            border-radius: 10px;
+            border-radius: 12px;
             font-family: 'Inter', sans-serif;
-            font-size: 0.88rem;
-            background: #fff;
+            font-size: 0.92rem;
+            font-weight: 500;
+            background: #fff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%236b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>') no-repeat right 1rem center;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
             outline: none;
             cursor: pointer;
-            transition: border-color 0.2s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+            transition: all 0.2s ease;
         }
-        .select-group select:focus { border-color: var(--blue); }
+        .select-group select:focus {
+            border-color: var(--blue);
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+        }
+        .col-preview {
+            margin-top: 0.8rem;
+            padding: 0.8rem 1rem;
+            background: rgba(243, 244, 246, 0.6);
+            border-radius: 10px;
+            border: 1px solid #e5e7eb;
+        }
+        .col-preview-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-faint);
+            margin-bottom: 0.4rem;
+            font-weight: 600;
+        }
+        .col-preview-list {
+            list-style: none;
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            font-family: 'Inter', monospace;
+        }
+        .col-preview-list li {
+            padding: 0.15rem 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            border-bottom: 1px dashed #e5e7eb;
+        }
+        .col-preview-list li:last-child {
+            border-bottom: none;
+        }
 
         /* ── File chips ── */
         .file-chips {
             display: flex;
             flex-wrap: wrap;
+            justify-content: center;
             gap: 0.5rem;
             margin: 0.5rem 0;
         }
@@ -527,11 +567,13 @@
             <div class="select-grid">
                 <div class="select-group">
                     <label id="label-col-a">Column from File A</label>
-                    <select id="select-col-a"></select>
+                    <select id="select-col-a" onchange="updatePreviewA(); saveSelections()"></select>
+                    <div class="col-preview" id="preview-col-a" style="display:none;"></div>
                 </div>
                 <div class="select-group">
                     <label id="label-col-b">Column from File B</label>
-                    <select id="select-col-b"></select>
+                    <select id="select-col-b" onchange="updatePreviewB(); saveSelections()"></select>
+                    <div class="col-preview" id="preview-col-b" style="display:none;"></div>
                 </div>
             </div>
 
@@ -566,6 +608,8 @@ const state = {
     manualIds: [],
     resultDf: null,   // [{ fileAValue, fileBValue, match }]
     allFilesInfo: [],
+    selectedColA: null,
+    selectedColB: null,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -781,7 +825,60 @@ function goToConfigure() {
     document.getElementById('label-col-a').textContent = `Column from ${truncate(state.fileA.name, 30)}`;
     document.getElementById('label-col-b').textContent = `Column from ${truncate(state.fileB.name, 30)}`;
 
+    // Restore selections
+    if (state.selectedColA && state.fileA.headers.includes(state.selectedColA)) {
+        document.getElementById('select-col-a').value = state.selectedColA;
+    }
+    if (state.selectedColB && combinedB.headers.includes(state.selectedColB)) {
+        document.getElementById('select-col-b').value = state.selectedColB;
+    }
+
+    // Save defaults and render previews
+    saveSelections();
+    updatePreviewA();
+    updatePreviewB();
+
     showPhase('phase-configure');
+}
+
+function saveSelections() {
+    state.selectedColA = document.getElementById('select-col-a').value;
+    state.selectedColB = document.getElementById('select-col-b').value;
+}
+
+function renderColPreview(colName, data, elementId) {
+    const el = document.getElementById(elementId);
+    if (!colName || !data || data.length === 0) {
+        el.style.display = 'none';
+        return;
+    }
+    
+    // Get first 3 non-empty values
+    const samples = [];
+    for (let i = 0; i < data.length && samples.length < 3; i++) {
+        const val = String(data[i][colName] || '').trim();
+        if (val) samples.push(val);
+    }
+    
+    if (samples.length === 0) {
+        el.style.display = 'none';
+        return;
+    }
+    
+    let html = `<div class="col-preview-title">Data Preview</div><ul class="col-preview-list">`;
+    samples.forEach(s => html += `<li>${escapeHtml(s)}</li>`);
+    html += `</ul>`;
+    
+    el.innerHTML = html;
+    el.style.display = 'block';
+}
+
+function updatePreviewA() {
+    renderColPreview(document.getElementById('select-col-a').value, state.fileA.data, 'preview-col-a');
+}
+
+function updatePreviewB() {
+    renderColPreview(document.getElementById('select-col-b').value, state.combinedB.data, 'preview-col-b');
 }
 
 function goToUpload() {
