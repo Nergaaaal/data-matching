@@ -355,23 +355,85 @@
             border-bottom: none;
         }
 
+        
+        /* ── Custom Select ── */
+        .custom-select {
+            position: relative;
+            width: 100%;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.92rem;
+            font-weight: 500;
+        }
+        .custom-select-value {
+            padding: 0.8rem 1rem;
+            background: #fff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%236b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>') no-repeat right 1rem center;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            cursor: pointer;
+            user-select: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding-right: 2.5rem;
+        }
+        .custom-select.open .custom-select-value {
+            border-color: var(--blue);
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+        }
+        .custom-select-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            margin-top: 0.4rem;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            max-height: 250px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+            flex-direction: column;
+            padding: 0.3rem;
+        }
+        .custom-select.open .custom-select-dropdown {
+            display: flex;
+        }
+        .custom-select-option {
+            padding: 0.6rem 0.8rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .custom-select-option:hover {
+            background: #f3f4f6;
+        }
+        .custom-select-option.selected {
+            background: #eff6ff;
+            color: var(--blue);
+            font-weight: 600;
+        }
+
         /* ── File chips ── */
         .file-chips {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 0.5rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
             margin: 0.5rem 0;
         }
         .file-chip {
-            display: inline-flex;
+            display: flex;
             align-items: center;
-            gap: 0.4rem;
-            padding: 0.35rem 0.8rem;
+            gap: 0.6rem;
+            padding: 0.6rem 1rem;
             background: rgba(255,255,255,0.9);
             border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            font-size: 0.78rem;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            width: 100%;
         }
         .chip-dot {
             width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
@@ -567,12 +629,18 @@
             <div class="select-grid">
                 <div class="select-group">
                     <label id="label-col-a">Column from File A</label>
-                    <select id="select-col-a" onchange="updatePreviewA(); saveSelections()"></select>
+                    <div class="custom-select" id="custom-wrap-a">
+                        <div class="custom-select-value" id="custom-val-a" onclick="toggleDropdown('a')">Select column...</div>
+                        <div class="custom-select-dropdown" id="custom-drop-a"></div>
+                    </div>
                     <div class="col-preview" id="preview-col-a" style="display:none;"></div>
                 </div>
                 <div class="select-group">
                     <label id="label-col-b">Column from File B</label>
-                    <select id="select-col-b" onchange="updatePreviewB(); saveSelections()"></select>
+                    <div class="custom-select" id="custom-wrap-b">
+                        <div class="custom-select-value" id="custom-val-b" onclick="toggleDropdown('b')">Select column...</div>
+                        <div class="custom-select-dropdown" id="custom-drop-b"></div>
+                    </div>
                     <div class="col-preview" id="preview-col-b" style="display:none;"></div>
                 </div>
             </div>
@@ -819,22 +887,21 @@ function goToConfigure() {
     // Build chips
     renderChips('chips-configure', state.allFilesInfo, false);
 
-    // Populate selects
-    populateSelect('select-col-a', state.fileA.headers);
-    populateSelect('select-col-b', combinedB.headers);
     document.getElementById('label-col-a').textContent = `Column from ${truncate(state.fileA.name, 30)}`;
     document.getElementById('label-col-b').textContent = `Column from ${truncate(state.fileB.name, 30)}`;
 
-    // Restore selections
-    if (state.selectedColA && state.fileA.headers.includes(state.selectedColA)) {
-        document.getElementById('select-col-a').value = state.selectedColA;
+    // Set defaults if null
+    if (!state.selectedColA || !state.fileA.headers.includes(state.selectedColA)) {
+        state.selectedColA = state.fileA.headers[0];
     }
-    if (state.selectedColB && combinedB.headers.includes(state.selectedColB)) {
-        document.getElementById('select-col-b').value = state.selectedColB;
+    if (!state.selectedColB || !combinedB.headers.includes(state.selectedColB)) {
+        state.selectedColB = combinedB.headers[0];
     }
+    
+    document.getElementById('custom-val-a').textContent = state.selectedColA;
+    document.getElementById('custom-val-b').textContent = state.selectedColB;
 
-    // Save defaults and render previews
-    saveSelections();
+    renderDropdowns();
     updatePreviewA();
     updatePreviewB();
 
@@ -842,8 +909,8 @@ function goToConfigure() {
 }
 
 function saveSelections() {
-    state.selectedColA = document.getElementById('select-col-a').value;
-    state.selectedColB = document.getElementById('select-col-b').value;
+    state.selectedColA = state.selectedColA;
+    state.selectedColB = state.selectedColB;
 }
 
 function renderColPreview(colName, data, elementId) {
@@ -874,11 +941,11 @@ function renderColPreview(colName, data, elementId) {
 }
 
 function updatePreviewA() {
-    renderColPreview(document.getElementById('select-col-a').value, state.fileA.data, 'preview-col-a');
+    renderColPreview(state.selectedColA, state.fileA.data, 'preview-col-a');
 }
 
 function updatePreviewB() {
-    renderColPreview(document.getElementById('select-col-b').value, state.combinedB.data, 'preview-col-b');
+    renderColPreview(state.selectedColB, state.combinedB.data, 'preview-col-b');
 }
 
 function goToUpload() {
@@ -887,6 +954,64 @@ function goToUpload() {
         document.getElementById('loaded-banner').style.display = '';
     }
     showPhase('phase-upload');
+}
+
+
+// Dropdown logic
+function toggleDropdown(side) {
+    const wrapA = document.getElementById('custom-wrap-a');
+    const wrapB = document.getElementById('custom-wrap-b');
+    
+    if (side === 'a') {
+        wrapB.classList.remove('open');
+        wrapA.classList.toggle('open');
+    } else {
+        wrapA.classList.remove('open');
+        wrapB.classList.toggle('open');
+    }
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.custom-select')) {
+        document.getElementById('custom-wrap-a')?.classList.remove('open');
+        document.getElementById('custom-wrap-b')?.classList.remove('open');
+    }
+});
+
+function selectOption(side, val) {
+    if (side === 'a') {
+        state.selectedColA = val;
+        document.getElementById('custom-val-a').textContent = val;
+        document.getElementById('custom-wrap-a').classList.remove('open');
+        updatePreviewA();
+    } else {
+        state.selectedColB = val;
+        document.getElementById('custom-val-b').textContent = val;
+        document.getElementById('custom-wrap-b').classList.remove('open');
+        updatePreviewB();
+    }
+    renderDropdowns();
+}
+
+function renderDropdowns() {
+    const renderDrop = (side, headers, selected) => {
+        const drop = document.getElementById(`custom-drop-${side}`);
+        if(!drop) return;
+        drop.innerHTML = headers.map(h => {
+            const isSel = h === selected;
+            return `<div class="custom-select-option ${isSel ? 'selected' : ''}" onclick="selectOption('${side}', '${escapeHtml(h).replace(/'/g, "\'")}')">${escapeHtml(h)}</div>`;
+        }).join('');
+    };
+    if (state.fileA) renderDrop('a', state.fileA.headers, state.selectedColA);
+    if (state.combinedB) renderDrop('b', state.combinedB.headers, state.selectedColB);
+}
+
+function populateSelect(id, headers) {
+    // Deprecated for custom dropdown
+}
+
+function saveSelections() {
+    // Now handled directly in selectOption
 }
 
 function populateSelect(id, headers) {
@@ -911,8 +1036,8 @@ function normalize(val) {
 }
 
 function runMatch() {
-    const colA = document.getElementById('select-col-a').value;
-    const colB = document.getElementById('select-col-b').value;
+    const colA = state.selectedColA;
+    const colB = state.selectedColB;
     const dataA = state.fileA.data;
     const dataB = state.combinedB.data;
 
