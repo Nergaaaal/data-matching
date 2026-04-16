@@ -513,10 +513,7 @@
                 ▶ &nbsp;Continue to Matching
             </button>
 
-            <div class="empty-state" id="empty-state">
-                <div class="empty-icon">📂</div>
-                <p style="font-size:0.9rem; font-weight:500; color:#9ca3af;">Upload at least two files to start</p>
-            </div>
+
         </div>
 
         <!-- ═══ PHASE 2: CONFIGURE ═══ -->
@@ -555,8 +552,6 @@
 
             <button class="btn-primary" onclick="downloadXlsx()">⬇ &nbsp;Download Match Report (.xlsx)</button>
         </div>
-
-        <div class="footer">Data Matching · All processing happens in your browser</div>
     </div>
 
 <script>
@@ -682,10 +677,8 @@ async function handleFileInput(file, zone, nameId, metaId, onParsed) {
 
 function updateContinueButton() {
     const btn = document.getElementById('btn-continue');
-    const empty = document.getElementById('empty-state');
     const ready = state.fileA && state.fileB;
     btn.disabled = !ready;
-    empty.style.display = ready ? 'none' : '';
 }
 
 // ── Extra files ──
