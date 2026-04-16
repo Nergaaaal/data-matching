@@ -324,36 +324,58 @@
             box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
         }
         .col-preview {
-            margin-top: 0.8rem;
+            margin-top: 0.6rem;
             padding: 0.8rem 1rem;
-            background: rgba(243, 244, 246, 0.6);
-            border-radius: 10px;
-            border: 1px solid #e5e7eb;
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 12px;
+            border: 1px solid rgba(229, 231, 235, 0.6);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.01);
+            position: relative;
         }
         .col-preview-title {
-            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.7rem;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-faint);
-            margin-bottom: 0.4rem;
-            font-weight: 600;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+            font-weight: 700;
         }
         .col-preview-list {
             list-style: none;
-            font-size: 0.82rem;
+            font-size: 0.85rem;
             color: var(--text-secondary);
             font-family: 'Inter', monospace;
         }
         .col-preview-list li {
-            padding: 0.15rem 0;
+            display: flex;
+            align-items: center;
+            padding: 0.2rem 0;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            border-bottom: 1px dashed #e5e7eb;
+            border-bottom: 1px dashed rgba(229, 231, 235, 0.8);
         }
         .col-preview-list li:last-child {
             border-bottom: none;
         }
+        .preview-num {
+            font-size: 0.65rem;
+            color: var(--blue);
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 6px;
+            width: 18px;
+            height: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 0.5rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
 
         
         /* ── Custom Select ── */
@@ -932,8 +954,8 @@ function renderColPreview(colName, data, elementId) {
         return;
     }
     
-    let html = `<div class="col-preview-title">Data Preview</div><ul class="col-preview-list">`;
-    samples.forEach(s => html += `<li>${escapeHtml(s)}</li>`);
+    let html = `<div class="col-preview-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg> Data Preview</div><ul class="col-preview-list">`;
+    samples.forEach((s, idx) => html += `<li><span class="preview-num">${idx + 1}</span> ${escapeHtml(s)}</li>`);
     html += `</ul>`;
     
     el.innerHTML = html;
