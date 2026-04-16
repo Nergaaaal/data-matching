@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Matching</title>
+    <meta name="description" content="Match records across multiple CSV and XLSX files. Upload, map columns, and export match reports.">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Papa Parse for CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <!-- SheetJS for XLSX read/write -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: linear-gradient(145deg, #f0f2f5 0%, #e8ecf1 50%, #f0f2f5 100%);
+            --card-bg: rgba(255,255,255,0.85);
+            --card-border: rgba(255,255,255,0.6);
+            --text-primary: #1a1a2e;
+            --text-secondary: #374151;
+            --text-muted: #6b7280;
+            --text-faint: #9ca3af;
+            --accent-gradient: linear-gradient(135deg, #1a1a2e 0%, #2d2d50 100%);
+            --green: #059669;
+            --red: #ef4444;
+            --blue: #3b82f6;
+            --purple: #8b5cf6;
+            --radius: 14px;
+            --shadow: 0 4px 24px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.03);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            min-height: 100vh;
+            color: var(--text-secondary);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 0 1.5rem 3rem;
+        }
+
+        /* ── Brand ── */
+        .brand {
+            text-align: center;
+            padding: 2rem 0 1.5rem;
+        }
+        .brand h1 {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            letter-spacing: -0.03em;
+        }
+        .brand-line {
+            width: 40px;
+            height: 3px;
+            background: linear-gradient(90deg, var(--purple), var(--blue));
+            border-radius: 2px;
+            margin: 0.5rem auto 0;
+        }
+
+        /* ── Cards ── */
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1.2rem;
+            box-shadow: var(--shadow);
+            transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+        }
+        .card:hover {
+            box-shadow: 0 8px 32px rgba(0,0,0,0.07);
+        }
+
+        /* ── Upload zones ── */
+        .upload-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .upload-zone {
+            border: 2px dashed #d1d5db;
+            border-radius: var(--radius);
+            padding: 2rem 1rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            position: relative;
+            background: rgba(255,255,255,0.5);
+        }
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: var(--blue);
+            background: rgba(59,130,246,0.04);
+        }
+        .upload-zone.has-file {
+            border-color: var(--green);
+            border-style: solid;
+            background: rgba(5,150,105,0.04);
+        }
+        .upload-zone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .upload-icon {
+            font-size: 2rem;
+            margin-bottom: 0.4rem;
+        }
+        .upload-label {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+        }
+        .upload-filename {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-top: 0.3rem;
+            word-break: break-all;
+        }
+        .upload-meta {
+            font-size: 0.75rem;
+            color: var(--text-faint);
+            margin-top: 0.15rem;
+        }
+
+        /* ── Extra files ── */
+        .extras-toggle {
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 0.7rem 1rem;
+            border: 1px solid rgba(0,0,0,0.06);
+            border-radius: 12px;
+            background: rgba(255,255,255,0.5);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            user-select: none;
+            transition: background 0.2s;
+        }
+        .extras-toggle:hover { background: rgba(255,255,255,0.8); }
+        .extras-grid {
+            display: none;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.8rem;
+            margin-bottom: 1rem;
+        }
+        .extras-grid.open { display: grid; }
+        .extra-zone {
+            border: 2px dashed #e5e7eb;
+            border-radius: 10px;
+            padding: 1rem;
+            text-align: center;
+            cursor: pointer;
+            position: relative;
+            font-size: 0.78rem;
+            color: var(--text-faint);
+            transition: all 0.2s;
+            background: rgba(255,255,255,0.3);
+        }
+        .extra-zone:hover { border-color: #10b981; }
+        .extra-zone.has-file {
+            border-color: #10b981;
+            border-style: solid;
+            background: rgba(16,185,129,0.04);
+        }
+        .extra-zone input[type="file"] {
+            position: absolute; inset: 0; opacity: 0; cursor: pointer;
+        }
+
+        /* ── Separator ── */
+        .sep {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #d1d5db, transparent);
+            margin: 1.2rem 0;
+        }
+
+        /* ── Section label ── */
+        .section-label {
+            font-size: 0.92rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            margin-bottom: 0.6rem;
+        }
+        .section-label span {
+            font-weight: 400;
+            color: var(--text-faint);
+            font-size: 0.82rem;
+        }
+
+        /* ── Manual IDs ── */
+        .manual-row {
+            display: grid;
+            grid-template-columns: 1fr 80px;
+            gap: 1rem;
+            align-items: start;
+        }
+        .manual-textarea {
+            width: 100%;
+            min-height: 100px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 0.8rem 1rem;
+            font-family: 'Inter', monospace;
+            font-size: 0.88rem;
+            resize: vertical;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .manual-textarea:focus { border-color: var(--blue); }
+        .manual-textarea::placeholder { color: #c9cdd3; }
+        .id-count-box {
+            background: rgba(255,255,255,0.9);
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 0.8rem;
+            text-align: center;
+        }
+        .id-count-value {
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: var(--text-primary);
+        }
+        .id-count-label {
+            font-size: 0.65rem;
+            color: var(--text-faint);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 600;
+        }
+
+        /* ── Buttons ── */
+        .btn-primary {
+            width: 100%;
+            padding: 0.8rem 2rem;
+            background: var(--accent-gradient);
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(26,26,46,0.2);
+            transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(26,26,46,0.35);
+        }
+        .btn-primary:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .btn-back {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.5rem 1rem;
+            background: rgba(255,255,255,0.8);
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.2s;
+            margin-bottom: 1rem;
+        }
+        .btn-back:hover {
+            background: #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        /* ── Select ── */
+        .select-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        .select-group label {
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 0.3rem;
+        }
+        .select-group select {
+            width: 100%;
+            padding: 0.6rem 0.8rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.88rem;
+            background: #fff;
+            outline: none;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .select-group select:focus { border-color: var(--blue); }
+
+        /* ── File chips ── */
+        .file-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin: 0.5rem 0;
+        }
+        .file-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.35rem 0.8rem;
+            background: rgba(255,255,255,0.9);
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 0.78rem;
+        }
+        .chip-dot {
+            width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+        }
+        .chip-dot-a { background: var(--purple); }
+        .chip-dot-b { background: var(--blue); }
+        .chip-dot-x { background: #10b981; }
+        .chip-name { font-weight: 600; color: var(--text-primary); }
+        .chip-meta { color: var(--text-faint); }
+
+        /* ── Stats ── */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        .stat-box {
+            background: rgba(255,255,255,0.9);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            padding: 1.2rem 0.8rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        .stat-box:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.07);
+        }
+        .stat-icon { font-size: 1.3rem; margin-bottom: 0.2rem; }
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+        }
+        .stat-label {
+            font-size: 0.7rem;
+            color: var(--text-faint);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-top: 0.2rem;
+            font-weight: 600;
+        }
+
+        /* ── Table ── */
+        .table-wrap {
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+            margin: 1rem 0;
+            max-height: 460px;
+            overflow-y: auto;
+        }
+        .table-wrap table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        .table-wrap thead {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        .table-wrap th {
+            background: var(--text-primary);
+            color: #fff;
+            padding: 0.7rem 1rem;
+            font-weight: 600;
+            text-align: left;
+            font-size: 0.82rem;
+        }
+        .table-wrap th:last-child { text-align: center; }
+        .table-wrap td {
+            padding: 0.55rem 1rem;
+            border-bottom: 1px solid #f0f0f0;
+            background: #fff;
+        }
+        .table-wrap td:last-child { text-align: center; font-weight: 600; }
+        .match-1 { background: #ecfdf5 !important; color: var(--green); }
+        .match-0 { background: #fef2f2 !important; color: var(--red); }
+
+        /* ── Empty / placeholder ── */
+        .empty-state {
+            text-align: center;
+            padding: 2.5rem;
+            color: var(--text-faint);
+        }
+        .empty-icon {
+            font-size: 2.5rem;
+            opacity: 0.4;
+            margin-bottom: 0.4rem;
+        }
+
+        /* ── Footer ── */
+        .footer {
+            text-align: center;
+            padding: 2rem 0 1rem;
+            color: #c9cdd3;
+            font-size: 0.75rem;
+        }
+
+        /* ── Phase visibility ── */
+        .phase { display: none; }
+        .phase.active { display: block; }
+
+        /* ── Loaded banner ── */
+        .loaded-banner {
+            background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+            border: 1px solid #bbf7d0;
+            border-radius: 10px;
+            padding: 0.6rem 1rem;
+            font-size: 0.83rem;
+            color: #166534;
+            font-weight: 500;
+            margin-bottom: 1rem;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 640px) {
+            .upload-grid, .select-grid { grid-template-columns: 1fr; }
+            .extras-grid { grid-template-columns: 1fr 1fr; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .manual-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Brand -->
+        <div class="brand">
+            <h1>Data Matching</h1>
+            <div class="brand-line"></div>
+        </div>
+
+        <!-- ═══ PHASE 1: UPLOAD ═══ -->
+        <div id="phase-upload" class="phase active">
+
+            <div id="loaded-banner" class="loaded-banner" style="display:none;">
+                ✅ Files already loaded. You can re-upload or continue with existing data.
+            </div>
+
+            <div class="upload-grid">
+                <div class="upload-zone" id="zone-a">
+                    <input type="file" accept=".csv,.xlsx,.xls" id="input-a">
+                    <div class="upload-icon">📄</div>
+                    <div class="upload-label">File A · CSV / XLSX</div>
+                    <div class="upload-filename" id="name-a"></div>
+                    <div class="upload-meta" id="meta-a"></div>
+                </div>
+                <div class="upload-zone" id="zone-b">
+                    <input type="file" accept=".csv,.xlsx,.xls" id="input-b">
+                    <div class="upload-icon">📄</div>
+                    <div class="upload-label">File B · CSV / XLSX</div>
+                    <div class="upload-filename" id="name-b"></div>
+                    <div class="upload-meta" id="meta-b"></div>
+                </div>
+            </div>
+
+            <div class="extras-toggle" id="extras-toggle" onclick="toggleExtras()">
+                <span id="extras-arrow">▸</span> Upload additional files (up to 5)
+            </div>
+            <div class="extras-grid" id="extras-grid"></div>
+
+            <div class="sep"></div>
+
+            <div class="section-label">Manual IDs <span>(optional)</span></div>
+            <div class="manual-row">
+                <textarea class="manual-textarea" id="manual-ids" placeholder="One ID per line…"></textarea>
+                <div class="id-count-box">
+                    <div class="id-count-value" id="id-count">0</div>
+                    <div class="id-count-label">IDs</div>
+                </div>
+            </div>
+
+            <div class="sep"></div>
+
+            <button class="btn-primary" id="btn-continue" disabled onclick="goToConfigure()">
+                ▶ &nbsp;Continue to Matching
+            </button>
+
+            <div class="empty-state" id="empty-state">
+                <div class="empty-icon">📂</div>
+                <p style="font-size:0.9rem; font-weight:500; color:#9ca3af;">Upload at least two files to start</p>
+            </div>
+        </div>
+
+        <!-- ═══ PHASE 2: CONFIGURE ═══ -->
+        <div id="phase-configure" class="phase">
+            <button class="btn-back" onclick="goToUpload()">← Back</button>
+
+            <div class="file-chips" id="chips-configure"></div>
+            <div class="sep"></div>
+
+            <div class="section-label">Select matching columns</div>
+            <div class="select-grid">
+                <div class="select-group">
+                    <label id="label-col-a">Column from File A</label>
+                    <select id="select-col-a"></select>
+                </div>
+                <div class="select-group">
+                    <label id="label-col-b">Column from File B</label>
+                    <select id="select-col-b"></select>
+                </div>
+            </div>
+
+            <div class="sep"></div>
+
+            <button class="btn-primary" onclick="runMatch()">▶ &nbsp;Run Match</button>
+        </div>
+
+        <!-- ═══ PHASE 3: RESULTS ═══ -->
+        <div id="phase-results" class="phase">
+            <button class="btn-back" onclick="goToConfigure()">← Back</button>
+
+            <div class="file-chips" id="chips-results"></div>
+
+            <div class="stats-row" id="stats-row"></div>
+
+            <div class="table-wrap" id="table-wrap"></div>
+
+            <button class="btn-primary" onclick="downloadXlsx()">⬇ &nbsp;Download Match Report (.xlsx)</button>
+        </div>
+
+        <div class="footer">Data Matching · All processing happens in your browser</div>
+    </div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//                            STATE
+// ═══════════════════════════════════════════════════════════════════════════
+
+const state = {
+    fileA: null,      // { name, rows, cols, data: [{...}], headers: [...] }
+    fileB: null,
+    extras: [],       // same shape
+    manualIds: [],
+    resultDf: null,   // [{ fileAValue, fileBValue, match }]
+    allFilesInfo: [],
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+//                         FILE PARSING
+// ═══════════════════════════════════════════════════════════════════════════
+
+function parseFile(file) {
+    return new Promise((resolve, reject) => {
+        const name = file.name.toLowerCase();
+        if (name.endsWith('.csv') || name.endsWith('.tsv') || name.endsWith('.txt')) {
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                dynamicTyping: false,
+                complete: (results) => {
+                    let headers = results.meta.fields || [];
+                    let data = results.data || [];
+
+                    // If only 1 column, try re-splitting with other delimiters
+                    if (headers.length === 1 && data.length > 0) {
+                        const sampleVal = String(data[0][headers[0]] || '');
+                        for (const sep of [';', '\t', '|']) {
+                            if (sampleVal.includes(sep)) {
+                                // Re-parse with this delimiter
+                                Papa.parse(file, {
+                                    header: true,
+                                    skipEmptyLines: true,
+                                    delimiter: sep,
+                                    complete: (r2) => {
+                                        if ((r2.meta.fields || []).length > 1) {
+                                            resolve({
+                                                name: file.name,
+                                                headers: r2.meta.fields,
+                                                data: r2.data,
+                                                rows: r2.data.length,
+                                                cols: r2.meta.fields.length,
+                                            });
+                                        } else {
+                                            resolve({ name: file.name, headers, data, rows: data.length, cols: headers.length });
+                                        }
+                                    },
+                                    error: () => resolve({ name: file.name, headers, data, rows: data.length, cols: headers.length }),
+                                });
+                                return;
+                            }
+                        }
+                    }
+
+                    resolve({ name: file.name, headers, data, rows: data.length, cols: headers.length });
+                },
+                error: (err) => reject(err),
+            });
+        } else if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const wb = XLSX.read(e.target.result, { type: 'array' });
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(ws, { defval: '' });
+                    const headers = json.length > 0 ? Object.keys(json[0]) : [];
+                    resolve({ name: file.name, headers, data: json, rows: json.length, cols: headers.length });
+                } catch (err) { reject(err); }
+            };
+            reader.readAsArrayBuffer(file);
+        } else {
+            reject(new Error('Unsupported format'));
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//                         UPLOAD HANDLING
+// ═══════════════════════════════════════════════════════════════════════════
+
+function setupUploadZone(zoneId, inputId, nameId, metaId, onParsed) {
+    const zone = document.getElementById(zoneId);
+    const input = document.getElementById(inputId);
+
+    ['dragover', 'dragenter'].forEach(ev => {
+        zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add('dragover'); });
+    });
+    ['dragleave', 'drop'].forEach(ev => {
+        zone.addEventListener(ev, () => zone.classList.remove('dragover'));
+    });
+    zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer.files.length) {
+            input.files = e.dataTransfer.files;
+            handleFileInput(input.files[0], zone, nameId, metaId, onParsed);
+        }
+    });
+    input.addEventListener('change', () => {
+        if (input.files.length) handleFileInput(input.files[0], zone, nameId, metaId, onParsed);
+    });
+}
+
+async function handleFileInput(file, zone, nameId, metaId, onParsed) {
+    try {
+        const parsed = await parseFile(file);
+        zone.classList.add('has-file');
+        document.getElementById(nameId).textContent = parsed.name;
+        document.getElementById(metaId).textContent = `${parsed.rows.toLocaleString()} rows · ${parsed.cols} cols`;
+        onParsed(parsed);
+        updateContinueButton();
+    } catch (err) {
+        alert('Error reading file: ' + err.message);
+    }
+}
+
+function updateContinueButton() {
+    const btn = document.getElementById('btn-continue');
+    const empty = document.getElementById('empty-state');
+    const ready = state.fileA && state.fileB;
+    btn.disabled = !ready;
+    empty.style.display = ready ? 'none' : '';
+}
+
+// ── Extra files ──
+function initExtras() {
+    const grid = document.getElementById('extras-grid');
+    grid.innerHTML = '';
+    for (let i = 0; i < 5; i++) {
+        const div = document.createElement('div');
+        div.className = 'extra-zone';
+        div.id = `extra-zone-${i}`;
+        div.innerHTML = `
+            <input type="file" accept=".csv,.xlsx,.xls" id="extra-input-${i}">
+            <div style="font-size:1.2rem; margin-bottom:0.2rem;">📎</div>
+            <div id="extra-label-${i}">Drop file here</div>
+        `;
+        grid.appendChild(div);
+
+        const input = div.querySelector('input');
+        div.addEventListener('dragover', (e) => { e.preventDefault(); div.classList.add('dragover'); });
+        div.addEventListener('dragleave', () => div.classList.remove('dragover'));
+        div.addEventListener('drop', (e) => {
+            e.preventDefault();
+            div.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                input.files = e.dataTransfer.files;
+                handleExtraFile(i, input.files[0], div);
+            }
+        });
+        input.addEventListener('change', () => {
+            if (input.files.length) handleExtraFile(i, input.files[0], div);
+        });
+    }
+}
+
+async function handleExtraFile(idx, file, zone) {
+    try {
+        const parsed = await parseFile(file);
+        zone.classList.add('has-file');
+        document.getElementById(`extra-label-${idx}`).textContent = parsed.name.length > 20 ? parsed.name.slice(0, 18) + '…' : parsed.name;
+        state.extras[idx] = parsed;
+    } catch (err) { alert('Error: ' + err.message); }
+}
+
+function toggleExtras() {
+    const grid = document.getElementById('extras-grid');
+    const arrow = document.getElementById('extras-arrow');
+    const isOpen = grid.classList.toggle('open');
+    arrow.textContent = isOpen ? '▾' : '▸';
+}
+
+// Manual IDs count
+document.addEventListener('DOMContentLoaded', () => {
+    setupUploadZone('zone-a', 'input-a', 'name-a', 'meta-a', (p) => { state.fileA = p; });
+    setupUploadZone('zone-b', 'input-b', 'name-b', 'meta-b', (p) => { state.fileB = p; });
+    initExtras();
+
+    document.getElementById('manual-ids').addEventListener('input', (e) => {
+        const lines = e.target.value.trim().split('\n').filter(l => l.trim());
+        document.getElementById('id-count').textContent = lines.length;
+        state.manualIds = lines.map(l => l.trim());
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+//                         NAVIGATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+function showPhase(id) {
+    document.querySelectorAll('.phase').forEach(p => p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function goToConfigure() {
+    // Build combined file B (merge extras into B)
+    let combinedB = { ...state.fileB, data: [...state.fileB.data] };
+    state.extras.forEach(ex => {
+        if (ex && ex.data) {
+            combinedB.data = combinedB.data.concat(ex.data);
+            combinedB.rows = combinedB.data.length;
+        }
+    });
+    state.combinedB = combinedB;
+
+    // Build all files info
+    state.allFilesInfo = [
+        { name: state.fileA.name, rows: state.fileA.rows, cols: state.fileA.cols },
+        { name: state.fileB.name, rows: state.fileB.rows, cols: state.fileB.cols },
+    ];
+    state.extras.forEach(ex => {
+        if (ex) state.allFilesInfo.push({ name: ex.name, rows: ex.rows, cols: ex.cols });
+    });
+
+    // Build chips
+    renderChips('chips-configure', state.allFilesInfo, false);
+
+    // Populate selects
+    populateSelect('select-col-a', state.fileA.headers);
+    populateSelect('select-col-b', combinedB.headers);
+    document.getElementById('label-col-a').textContent = `Column from ${truncate(state.fileA.name, 30)}`;
+    document.getElementById('label-col-b').textContent = `Column from ${truncate(state.fileB.name, 30)}`;
+
+    showPhase('phase-configure');
+}
+
+function goToUpload() {
+    // Show loaded banner if data exists
+    if (state.fileA && state.fileB) {
+        document.getElementById('loaded-banner').style.display = '';
+    }
+    showPhase('phase-upload');
+}
+
+function populateSelect(id, headers) {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '';
+    headers.forEach(h => {
+        const opt = document.createElement('option');
+        opt.value = h;
+        opt.textContent = h;
+        sel.appendChild(opt);
+    });
+}
+
+function truncate(s, n) { return s.length <= n ? s : s.slice(0, n - 1) + '…'; }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//                         MATCHING
+// ═══════════════════════════════════════════════════════════════════════════
+
+function normalize(val) {
+    return String(val || '').trim().toLowerCase();
+}
+
+function runMatch() {
+    const colA = document.getElementById('select-col-a').value;
+    const colB = document.getElementById('select-col-b').value;
+    const dataA = state.fileA.data;
+    const dataB = state.combinedB.data;
+
+    // Build key maps (deduplicated)
+    const mapA = new Map();
+    dataA.forEach(row => {
+        const key = normalize(row[colA]);
+        if (key && !mapA.has(key)) mapA.set(key, String(row[colA] || ''));
+    });
+
+    const mapB = new Map();
+    dataB.forEach(row => {
+        const key = normalize(row[colB]);
+        if (key && !mapB.has(key)) mapB.set(key, String(row[colB] || ''));
+    });
+
+    // Add manual IDs to B side
+    state.manualIds.forEach(id => {
+        const key = normalize(id);
+        if (key && !mapB.has(key)) mapB.set(key, id);
+    });
+
+    // Full outer join
+    const allKeys = new Set([...mapA.keys(), ...mapB.keys()]);
+    const results = [];
+
+    allKeys.forEach(key => {
+        const aVal = mapA.get(key) || '—';
+        const bVal = mapB.get(key) || '—';
+        const match = (mapA.has(key) && mapB.has(key)) ? 1 : 0;
+        results.push({ fileAValue: aVal, fileBValue: bVal, match });
+    });
+
+    // Sort: matches first
+    results.sort((a, b) => b.match - a.match);
+
+    state.resultDf = results;
+
+    // Render results
+    renderResults();
+    showPhase('phase-results');
+}
+
+function renderResults() {
+    const df = state.resultDf;
+    const total = df.length;
+    const matched = df.filter(r => r.match === 1).length;
+    const unmatched = total - matched;
+    const pct = total > 0 ? (matched / total * 100) : 0;
+    const pctColor = pct >= 70 ? 'var(--green)' : (pct >= 40 ? 'var(--blue)' : 'var(--red)');
+
+    // Chips
+    renderChips('chips-results', state.allFilesInfo, true);
+
+    // Stats
+    document.getElementById('stats-row').innerHTML = `
+        <div class="stat-box">
+            <div class="stat-icon">📊</div>
+            <div class="stat-value" style="color:var(--text-primary)">${total.toLocaleString()}</div>
+            <div class="stat-label">Total Records</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-icon">✅</div>
+            <div class="stat-value" style="color:var(--green)">${matched.toLocaleString()}</div>
+            <div class="stat-label">Matched</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-icon">❌</div>
+            <div class="stat-value" style="color:var(--red)">${unmatched.toLocaleString()}</div>
+            <div class="stat-label">Unmatched</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-icon">🎯</div>
+            <div class="stat-value" style="color:${pctColor}">${pct.toFixed(1)}%</div>
+            <div class="stat-label">Match Rate</div>
+        </div>
+    `;
+
+    // Table
+    let rows = '';
+    df.forEach(r => {
+        const cls = r.match === 1 ? 'match-1' : 'match-0';
+        rows += `<tr>
+            <td>${escapeHtml(r.fileAValue)}</td>
+            <td>${escapeHtml(r.fileBValue)}</td>
+            <td class="${cls}">${r.match}</td>
+        </tr>`;
+    });
+
+    document.getElementById('table-wrap').innerHTML = `
+        <table>
+            <thead><tr><th>File A Value</th><th>File B Value</th><th>Match</th></tr></thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
+}
+
+function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+function renderChips(containerId, info, compact) {
+    const dots = ['chip-dot-a', 'chip-dot-b', 'chip-dot-x', 'chip-dot-x', 'chip-dot-x'];
+    const el = document.getElementById(containerId);
+    el.innerHTML = info.map((fi, i) => {
+        const dot = dots[i] || 'chip-dot-x';
+        const name = fi.name.length > 30 ? fi.name.slice(0, 27) + '…' : fi.name;
+        const meta = compact ? `${fi.rows.toLocaleString()} rows` : `${fi.rows.toLocaleString()} rows · ${fi.cols} cols`;
+        return `<div class="file-chip">
+            <div class="chip-dot ${dot}"></div>
+            <span class="chip-name">${escapeHtml(name)}</span>
+            <span class="chip-meta">${meta}</span>
+        </div>`;
+    }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//                         XLSX EXPORT
+// ═══════════════════════════════════════════════════════════════════════════
+
+function downloadXlsx() {
+    const df = state.resultDf;
+    const total = df.length;
+    const matched = df.filter(r => r.match === 1).length;
+    const pct = total > 0 ? (matched / total * 100) : 0;
+
+    // Build worksheet data
+    const wsData = [['File A Value', 'File B Value', 'Match']];
+    df.forEach(r => wsData.push([r.fileAValue, r.fileBValue, r.match]));
+    wsData.push([]);
+    wsData.push(['Match Rate:', pct.toFixed(1) + '%']);
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // Column widths
+    ws['!cols'] = [{ wch: 35 }, { wch: 35 }, { wch: 14 }];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Match Results');
+    XLSX.writeFile(wb, 'match_report.xlsx');
+}
+</script>
+</body>
+</html>
